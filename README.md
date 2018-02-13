@@ -1,9 +1,11 @@
 # linux-shell
-A command line linux shell. The user can choose between __interactive__ and __batch version__. Inserted commands can be seperated using __';' delimiter__ for each line.
+A command line linux shell.:+1:
+The user can choose between __interactive__ and __batch version__. Inserted commands can be seperated using __';' delimiter__ for each line.
 
 ### How to run the project:
 
-- Interactive
+- ### Interactive
+
 Instantly execution of commands after return character is pressed. 
 
     ```
@@ -14,7 +16,7 @@ Instantly execution of commands after return character is pressed.
     $ ./bin/myshell     //start interactive shell
     ```
 
-- Batch
+- ### Batch
 Create a batch file with your commands and pass it as argument. 
 
     ```
@@ -24,5 +26,3 @@ Create a batch file with your commands and pass it as argument.
     
     $ ./bin/myshell batchfile     //start batch shell
     ```
-    
-    :+1:
