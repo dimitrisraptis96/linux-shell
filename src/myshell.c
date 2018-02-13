@@ -245,7 +245,7 @@ void child(char *command[LINE_SIZE][ARG_SIZE], int id){
   // execute command
   if(execvp(command[id][0], command[id]) == -1){
     // invalid command   
-    // printf("Unknown command: %s\n",command[id][0]);
+    printf("[INFO]: Unknown command: %s\n",command[id][0]);
     exit(EXIT_FAILURE);
   }
   else {
