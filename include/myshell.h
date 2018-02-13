@@ -21,7 +21,7 @@
                                     __FILE__, __LINE__ ); \
                             exit( EXIT_FAILURE );}}
 
-// declarate functions
+// declare functions
 void interactive();
 
 void batch(char *batchfile);
