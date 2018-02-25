@@ -45,26 +45,22 @@ int find_commandNum(char *line);
 
 char *remove_whitespace (char *line);
 
-int split_old(const char *delim, char *src, char **dst);
+int split_commands(const char *delim, char *src, Command *commands);
 
-
-
-// void execute(int size,char *commands[LINE_SIZE][ARG_SIZE], int *flag);
-
-// void child(char *command[LINE_SIZE][ARG_SIZE], int id);
-
-void kill_children(pid_t *pid, int start, int size);
-
-int get_command_copy (char* copy, char *command[ARG_SIZE], int id);
+int split_args(const char *delim, Command *command);
 
 int has_pipe(char *command, int size);
 
-
-
-int split_commands(const char *delim, char *src, Command *commands);
-int split_args(const char *delim, Command *commands, int id);
 void free_commands(Command *commands);
-void child(Command cmd, int id);
+
 void execute(int size,Command *commands);
+
+void child(Command cmd, int id);
+
+void pipeline(Command cmd, int id);
+
+int spawn_proc (int in, int out,Command cmd, int id);
+
+void kill_children(pid_t *pid, int start, int size);
 
 #endif

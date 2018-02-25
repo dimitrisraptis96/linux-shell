@@ -1,4 +1,32 @@
-ls  -l; pwd;  mkdir tmp;
+# example batch file
 
-echo 'raptis dimitrios 8467'
-pwd; quit
+echo 
+
+&&pwd && date
+
+echo 
+
+pwd; date
+
+echo 
+
+date;;;; pwd
+
+echo 
+
+grep hello file1 && date
+
+echo 
+
+pw ; date
+
+echo 
+
+dat && pwd
+
+echo 
+
+ls -a|wc -c
+
+quit
+
