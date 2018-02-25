@@ -35,8 +35,7 @@ typedef struct _Command Command;
                             exit( EXIT_FAILURE );}}
 
 
-
-// declarate functions
+// declare functions
 void interactive();
 
 void batch(char *batchfile);

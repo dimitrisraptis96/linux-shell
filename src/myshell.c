@@ -1,12 +1,21 @@
+/*
+ * Author:    Dimitrios Raptis 8467
+ *
+ * Purpose:   A command line linux shell implementing interactive and batch mode
+ *
+ * Language:  C
+ */
+
+
 #include "../include/myshell.h"
 
 #define LINE_SIZE 512
 #define ARG_SIZE  64
 
 struct _Command {
-  char *args[ARG_SIZE];
-
-  int isAmpersand, isPipe;
+  char *args[ARG_SIZE]; // command plus arguments
+  int isAmpersand;      // true if command is right before '&&'
+  int isPipe;           // true if command includes pipeline
 };
 
 
@@ -60,9 +69,6 @@ void interactive(){
 
       commands[i].args[0] = remove_whitespace(commands[i].args[0]);
       split_args(" \t\r\n\a", &commands[i]);
-      // printf("comm: %s\n",commands[i].args[0]);
-      // printf("isAmp: %d\n",commands[i].isAmpersand);
-      // printf("isPipe: %d\n",commands[i].isPipe);
     }
 
     execute(commandNum,commands);
@@ -75,16 +81,6 @@ void interactive(){
     }
   }
 
-  void free_commands(Command *commands){
-    int i,j;
-
-    for (i=0;i<LINE_SIZE;i++){
-      commands[i].isAmpersand = 0;
-      commands[i].isPipe =0;
-      for (j=0; j<ARG_SIZE; j++)
-        commands[i].args[j] = NULL;      
-    }
-  }
 
 
 void batch(char *filename){
@@ -118,8 +114,21 @@ void batch(char *filename){
 
     free_commands(commands);
     }
+
   // close the file
   HANDLE_EOF( fclose(fp) );
+}
+
+// set last commands struct to zero
+void free_commands(Command *commands){
+  int i,j;
+
+  for (i=0;i<LINE_SIZE;i++){
+    commands[i].isAmpersand = 0;
+    commands[i].isPipe =0;
+    for (j=0; j<ARG_SIZE; j++)
+      commands[i].args[j] = NULL;      
+  }
 }
 
 // remove leading and ending whitespace
@@ -140,6 +149,7 @@ char *remove_whitespace (char *line){
   return line;
 }
 
+// split a command into arguments and return the number of them
 int split_args(const char *delim, Command *command){
   char *token;
   char *copy = strdup(command->args[0]);
@@ -157,6 +167,7 @@ int split_args(const char *delim, Command *command){
   return count;
 }
 
+// split a string into commands according to delimiters
 int split_commands(const char *delim, char *src, Command *commands){
   char *token;
   char *copy = strdup(src);
@@ -176,6 +187,7 @@ int split_commands(const char *delim, char *src, Command *commands){
   return count;
 }
 
+// check if the string-command includes the pipeline symbol
 int has_pipe(char *command, int size){
   int i=0;
   int count=0;
@@ -202,13 +214,12 @@ int get_command_copy (char *copy, Command command){
     pos++; 
   }
 
-  copy[pos] = '\0'; 
-  // printf("copy: %s\n",copy);
+  copy[pos] = '\0';
 
   return pos;
 }
 
-
+// find number of commands into the line
 int find_commandNum(char *line){
   int i;
   int counter=1;
@@ -220,6 +231,7 @@ int find_commandNum(char *line){
   return counter;
 }
 
+// signal handler for killing child processes
 void sigquit_handler (int sig) {
     assert(sig == SIGQUIT);
     _exit(0);
@@ -255,16 +267,19 @@ void execute(int size,Command *commands){
       parent = 1;
     }
     else if (pid[i] == 0){  // CHILD processes 
+
+      // check if the command includes pipeline
       (commands[i].isPipe) ? pipeline(commands[i],i): child(commands[i], i);
       exit(EXIT_SUCCESS);
     }
     else {                  // ERROR during fork
+      
       printf("[ERROR]: Fork failed\n");
       exit(EXIT_FAILURE);
     }
   }
 
-  // only parent here!!!
+  // only parent goes here!!!
   if (parent){
 
     for(int i=0;i<size;i++){  
@@ -272,7 +287,7 @@ void execute(int size,Command *commands){
       flag[i]=1;
       while ( ( waitpid(pid[i],&status[i],0) ) > -1 );
 
-      // check if previous command executed successfully
+      // check if previous command executed successfully (if '&&' is used)
       if (WEXITSTATUS(status[i]) == EXIT_FAILURE && commands[i].isAmpersand){
         printf("Rest of commands abandoned!\n");
         kill_children(pid,i,size);
@@ -282,7 +297,7 @@ void execute(int size,Command *commands){
 
     // check if quit is entered
     if(*quit) {
-      printf("[FINAL]: 'quit' entered, exiting shell..\n");
+      printf("'quit' entered, exiting shell..\n");
       exit(EXIT_SUCCESS);
     }
     // free shared memory
@@ -328,12 +343,13 @@ void child(Command cmd,int id){
   }    
 }
 
-
+// execute pipeline commands
 void pipeline(Command cmd, int id){
   int i, num;
   char copy[LINE_SIZE];
   Command *commands;
-    
+  
+  // get the full command string  
   get_command_copy(copy,cmd);
 
   // temporary struct with pipeline command
@@ -344,6 +360,7 @@ void pipeline(Command cmd, int id){
   num = split_args("|",&tmp);
   HANDLE_NULL( ( commands = (Command *) malloc (num*sizeof(Command)) ) );
 
+  // split arguments for each command
   for(i=0; i<num; i++){
     commands[i].args[0] = tmp.args[i]; // copy tmp commands to the final struct
     commands[i].args[0] = remove_whitespace(commands[i].args[0]);
@@ -383,6 +400,7 @@ void pipeline(Command cmd, int id){
   child(commands[num-1], id);
 }
 
+// execute commands within a pipeline forking a new child for each command(expept last one)
 int spawn_proc (int in, int out, Command cmd, int id){
   pid_t pid;
 

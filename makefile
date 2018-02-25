@@ -27,4 +27,4 @@ clean:
 	$(RM) -r $(BUILDDIR) $(TARGET)
 
 compress:
-	tar -cvzf 8467.tar 8467/*
+	tar -cvzf 8467.tar ./*

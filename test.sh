@@ -27,3 +27,5 @@ dat && pwd
 echo 
 
 ls -a|wc -c 
+
+quit
