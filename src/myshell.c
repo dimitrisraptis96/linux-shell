@@ -3,6 +3,11 @@
 #define LINE_SIZE 512
 #define ARG_SIZE  64
 
+int isPipe = 0;
+// int isAmpersand = 0;
+
+//TODO: add flag for the situation that commadnd is left of Ampersand
+
 int main(int argc, char *argv[]){
 
   switch (argc){
@@ -28,13 +33,14 @@ int main(int argc, char *argv[]){
 
 
 void interactive(){
-  int i;
+  int i,j;
 
   int commandNum; // number of commands per line
 
   char input[LINE_SIZE];      // origin line char array
   char *args[LINE_SIZE][ARG_SIZE];  // pointers to commands and argumentss
   char **buffer;        // temporary buffer for full commands pointers
+  int *isAmpersand;
 
   while(1){
     printf("raptis_8467> ");
@@ -49,21 +55,35 @@ void interactive(){
 
     // split commands 
     commandNum = find_commandNum(line);
+    // printf("num=%d\n",commandNum);
     HANDLE_NULL( (buffer = (char **) malloc(commandNum*sizeof(char*))) );
-    split(";",line,buffer);
+    HANDLE_NULL( (isAmpersand = (int *) malloc(commandNum*sizeof(int))) );
+    commandNum = split("&&;",line,buffer,isAmpersand);
+    // printf("num=%d\n",commandNum);
 
     // split arguments of each command
     for (i=0; i<commandNum; i++){
+      // printf("isAmpersand[%d]=%d\n",i,isAmpersand[i]);
+      // printf("%s\n", buffer[i]);
       args[i][0] = remove_whitespace(buffer[i]);
-      split(" \t\r", args[i][0], &args[i][0]);
+      int num = split_old(" \t\r\n\a", args[i][0], &args[i][0]);
+      // for (j=0;j<num;j++){
+        // printf("%s\n",args[i][j] );
+      // }
     }
 
-    execute(commandNum,args);
+    // char copy[LINE_SIZE];
+  // int size = get_command_copy(copy,command[id],id);  
+  // int isPipe = has_pipe(copy,size);
+
+    // printf("line: %s",line);
+    // exit(1);
+    execute(commandNum,args,isAmpersand);
 
     // delete previous line input
     memset(input, 0, LINE_SIZE);
 
-
+    free(isAmpersand);
     free(buffer);
     }
   }
@@ -77,6 +97,7 @@ void batch(char *filename){
   char input[LINE_SIZE];      // origin line char array
   char *args[LINE_SIZE][ARG_SIZE];  // pointers to commands and argumentss
   char **buffer;        // temporary buffer for full commands pointers
+  char *commands;
 
   // open batch file
   FILE *fp = fopen(filename,"r"); 
@@ -86,27 +107,28 @@ void batch(char *filename){
     // get line
     if (fgets(input, LINE_SIZE, fp) == NULL) break;
     
-    printf("\n");
-
     char *line = remove_whitespace(input);
     
     if (strlen(line) == 0) continue; // empty line
+    if (line[0] = '#') continue;   // comment line
+    
+    printf("\n");
 
     // split commands
     commandNum = find_commandNum(line); // find number of commands
     HANDLE_NULL( (buffer = (char **) malloc(commandNum*sizeof(char*))) );
-    commandNum = split(";",line,buffer);
-
+    // commandNum = split(";",line,buffer);
+    
     // split arguments
     for (i=0;i<commandNum;i++){
       args[i][0] = remove_whitespace(buffer[i]);
       // check if there is && seperator
       
-      split(" ", args[i][0], &args[i][0]);
+      // split(" ", args[i][0], &args[i][0]);
     }
 
     // execute commands
-    execute(commandNum,args);
+    // execute(commandNum,args);
 
     // delete previous line input
     memset(input,0,LINE_SIZE);
@@ -136,43 +158,76 @@ char *remove_whitespace (char *line){
   return line;
 }
 
-int split(const char *delim, char *src, char **dst){
+int split_old(const char *delim, char *src, char **dst){
   char *token;
   int count=0;
 
   token = strtok(src, delim);
   while( token != NULL ) {
-    // printf("%s+",token);
     dst[count] = token;
     count++;
     token = strtok(NULL, delim);
   }
+  return count;
+}
+
+int split(const char *delim, char *src, char **dst, int *flag){
+  char *token;
+  int count=0;
+
+  char *copy = strdup(src);
+  // strcpy(copy,src);
+
+  token = strtok(src, delim);
+  while( token != NULL ) {
+    // printf("%s+",token);
+    dst[count] = token;
+    // printf("%c\n", copy[token-src+strlen(token)]);
+    if (copy[token-src+strlen(token)] == '&')
+      flag[count]++;
+    count++;
+
+    token = strtok(NULL, delim);
+  }
+
+  free(copy);
   // printf("\n\n");
   return count;
 }
 
 int find_commandNum(char *line){
   int i;
-  int counter=0;
-  for(i=0;i<strlen(line);i++){
-    if (line[i]==';')
+  int counter=1;
+  for(i=0;i<strlen(line)-1;i++)
+  if (line[i]==';' || (line[i]=='&' && line[i+1]=='&'))
       counter++;
-  }
-  if(line[strlen(line)-1] != ';') counter++;
 
+  // if(line[strlen(line)-1] != ';') counter++;
+    if(line[i]==';') counter++;
   return counter;
 }
 
+void sigquit_handler (int sig) {
+    assert(sig == SIGQUIT);
+    pid_t self = getpid();
+    _exit(0);
+}
 
 static int *quit; // chech if quit is entered
 static int *flag; // help commands' contiguous execution 
 
-void execute(int size,char *command[LINE_SIZE][ARG_SIZE]){
+void execute(int size,char *command[LINE_SIZE][ARG_SIZE], int * isAmpersand){
 
-  pid_t pid[size];  //array of all pids
-  int status[size]; //aray of status
+  pid_t pid[size];  //array with all the pids
+  int status[size]; //array with the status
   int parent =0;    //parent flag
   int i;
+  int isPipe=0;
+  int fd[2];
+
+  pipe(fd);
+
+  signal(SIGQUIT, sigquit_handler);
 
   flag = (int *) malloc(size*sizeof(int));
 
@@ -184,18 +239,21 @@ void execute(int size,char *command[LINE_SIZE][ARG_SIZE]){
   *quit=0;
   for (i=0;i<size;i++) flag[i]=0;
 
-  // command exeution loop
+  // command execution loop
   for(i=0;i<size;i++){ 
 
     pid[i]=fork(); // fork for each command
+
+    isPipe = checkPipe();
 
     if (pid[i] > 0){        //PARENT process
       parent = 1;
     }
     else if (pid[i] == 0){  // CHILD processes 
       child(command,i);
+      exit(EXIT_SUCCESS);
     }
-    else {                    // ERROR during fork
+    else {                  // ERROR during fork
       printf("[ERROR]: Fork failed\n");
       exit(EXIT_FAILURE);
     }
@@ -209,7 +267,22 @@ void execute(int size,char *command[LINE_SIZE][ARG_SIZE]){
       flag[i]=1;
       while ( ( waitpid(pid[i],&status[i],0) ) > -1 );
 
-      printf("\n");
+      // printf("status[%d]: %d\n",i,status[i]);
+      
+      // while(WIFEXITED(status));
+
+    if (WEXITSTATUS(status[i]) == EXIT_FAILURE && isAmpersand[i]){
+      printf("[ERROR]: command %s FAILED\n",command[i][0]);
+      kill_children(pid,i,size);
+      return EXIT_FAILURE;
+    }
+    else{
+      printf("Everything FINE\n");
+    }
+    // if (WISIGNALED(status[i])) 
+   //   printf("Child exited via signal %d\n",WTERMSIG(status[i]));
+  
+  
     }
 
     // check if quit is entered
@@ -223,17 +296,81 @@ void execute(int size,char *command[LINE_SIZE][ARG_SIZE]){
   }
 }
 
+void kill_children(pid_t * pid, int start, int size){
+  int i;
+  for(i=start;i<size;i++)
+    kill(pid[i], SIGQUIT);
+}
+
+/*int
+spawn_proc (int in, int out, struct command *cmd)
+{
+  pid_t pid;
+
+  if ((pid = fork ()) == 0)
+    {
+      if (in != 0)
+        {
+          dup2 (in, 0);
+          close (in);
+        }
+
+      if (out != 1)
+        {
+          dup2 (out, 1);
+          close (out);
+        }
+
+      return execvp (cmd->argv [0], (char * const *)cmd->argv);
+    }
+
+  return pid;
+}*/
+
 void child(char *command[LINE_SIZE][ARG_SIZE], int id){
 
   // wait until previous command execution
-  while(!flag[id]){
-    ;
-  }
+  while(!flag[id]);
+  
+
+  // char copy[LINE_SIZE];
+  // int size = get_command_copy(copy,command[id],id);  
+  // int isPipe = has_pipe(copy,size);
+
+  // if(isPipe){
+
+   //  char **dst = (char**) malloc(isPipe*sizeof(char*);
+    //   int num = split_old("|", copy, dst);
+   //  int i,in, fd [2];
+
+   //  /* The first process should get its input from the original file descriptor 0.  */
+   //  in = 0;
+
+   //  /* Note the loop bound, we spawn here all, but the last stage of the pipeline.  */
+   //  for (i = 0; i < isPipe - 1; ++i)
+   //    {
+   //      pipe (fd);
+
+   //       f [1] is the write end of the pipe, we carry `in` from the prev iteration.  
+   //      spawn_proc (in, fd [1], cmd + i);
+
+   //      /* No need for the write end of the pipe, the child will write here.  */
+   //      close (fd [1]);
+
+   //      /* Keep the read end of the pipe, the next child will read from there.  */
+   //      in = fd [0];
+   //    }
+
+   //  /* Last stage of the pipeline - set stdin be the read end of the previous pipe
+   //     and output to the original file descriptor 1. */  
+   //  if (in != 0)
+   //    dup2 (in, 0);
+  // }
 
   // empty command
   if( strcmp(command[id][0],"") == 0){
     // printf("empty command\n");
-    exit(EXIT_FAILURE);
+    exit(EXIT_SUCCESS);
   }
   // quit is entered
   if( strcmp(command[id][0],"quit")==0 ){
@@ -245,7 +382,7 @@ void child(char *command[LINE_SIZE][ARG_SIZE], int id){
   // execute command
   if(execvp(command[id][0], command[id]) == -1){
     // invalid command   
-    printf("[INFO]: Unknown command: %s\n",command[id][0]);
+    // printf("Unknown command: %s\n",command[id][0]);
     exit(EXIT_FAILURE);
   }
   else {
@@ -255,3 +392,36 @@ void child(char *command[LINE_SIZE][ARG_SIZE], int id){
     exit(EXIT_SUCCESS);
   }    
 } 
+
+int checkPipe(){
+
+
+  return 1;
+}
+
+int get_command_copy (char *copy, char *command[ARG_SIZE], int id){
+  int j=0, pos=0, size;
+
+  // loop arguments
+  while(command[j] != NULL){
+    size = strlen(command[j]);
+    memcpy(&copy[pos], command[j], size);
+    pos += size;
+    j++;
+  }
+
+  copy[pos] = '\0'; 
+  // printf("neww --%s--\n",copy);
+
+  return pos;
+}
+
+int has_pipe(char *command, int size){
+  int i=0;
+  int count=1;
+  for(i=0;i<size;i++)
+    if (command[i] == '|')
+      count++;
+
+  return count;
+}

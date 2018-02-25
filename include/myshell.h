@@ -10,6 +10,13 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <signal.h>
+#include <errno.h>
+#include <assert.h>
+ 
+#include <unistd.h>
+#include <sched.h>
+
 // error handlers
 #define HANDLE_NULL( a ) {if (a == NULL) { \
                             printf( "Host memory failed in %s at line %d\n", \
@@ -21,7 +28,7 @@
                                     __FILE__, __LINE__ ); \
                             exit( EXIT_FAILURE );}}
 
-// declare functions
+// declarate functions
 void interactive();
 
 void batch(char *batchfile);
@@ -30,10 +37,18 @@ int find_commandNum(char *line);
 
 char *remove_whitespace (char *line);
 
-int split(const char *delim, char *src, char **dst);
+int split_old(const char *delim, char *src, char **dst);
 
-void execute(int size,char *commands[512][64]);
+int split(const char *delim, char *src, char **dst, int *flag);
+
+void execute(int size,char *commands[512][64], int *flag);
 
 void child(char *command[512][64], int id);
+
+void kill_children(pid_t *pid, int start, int size);
+
+int get_command_copy (char* copy, char *command[64], int id);
+
+int has_pipe(char *command, int size);
 
 #endif
