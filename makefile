@@ -26,5 +26,5 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
 clean:
 	$(RM) -r $(BUILDDIR) $(TARGET)
 
-release:
-	tar -cvf myshell.tar ./*
+compress:
+	tar -cvzf 8467.tar 8467/*

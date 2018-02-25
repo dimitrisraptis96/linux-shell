@@ -26,7 +26,4 @@ dat && pwd
 
 echo 
 
-ls -a|wc -c
-
-quit
-
+ls -a|wc -c 
