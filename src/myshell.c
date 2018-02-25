@@ -3,8 +3,13 @@
 #define LINE_SIZE 512
 #define ARG_SIZE  64
 
-int isPipe = 0;
-// int isAmpersand = 0;
+struct _Command{
+  char *args[ARG_SIZE];
+
+  int isAmpersand, isPipe;
+};
+
+
 
 //TODO: add flag for the situation that commadnd is left of Ampersand
 
@@ -33,14 +38,12 @@ int main(int argc, char *argv[]){
 
 
 void interactive(){
-  int i,j;
+  int i;
 
   int commandNum; // number of commands per line
+  char input[LINE_SIZE];     
 
-  char input[LINE_SIZE];      // origin line char array
-  char *args[LINE_SIZE][ARG_SIZE];  // pointers to commands and argumentss
-  char **buffer;        // temporary buffer for full commands pointers
-  int *isAmpersand;
+  Command commands[LINE_SIZE];
 
   while(1){
     printf("raptis_8467> ");
@@ -54,37 +57,34 @@ void interactive(){
     if (strlen(line) == 0) continue; // empty line
 
     // split commands 
-    commandNum = find_commandNum(line);
-    // printf("num=%d\n",commandNum);
-    HANDLE_NULL( (buffer = (char **) malloc(commandNum*sizeof(char*))) );
-    HANDLE_NULL( (isAmpersand = (int *) malloc(commandNum*sizeof(int))) );
-    commandNum = split("&&;",line,buffer,isAmpersand);
-    // printf("num=%d\n",commandNum);
+    commandNum = split_commands("&&;",line,commands);
 
     // split arguments of each command
     for (i=0; i<commandNum; i++){
-      // printf("isAmpersand[%d]=%d\n",i,isAmpersand[i]);
-      // printf("%s\n", buffer[i]);
-      args[i][0] = remove_whitespace(buffer[i]);
-      int num = split_old(" \t\r\n\a", args[i][0], &args[i][0]);
-      // for (j=0;j<num;j++){
-        // printf("%s\n",args[i][j] );
-      // }
+
+      // printf("comm: %s\n",commands[i].args[0]);
+      // printf("isAmp: %d\n",commands[i].isAmpersand);
+      commands[i].args[0] = remove_whitespace(commands[i].args[0]);
+      split_args(" \t\r\n\a", commands, i);
     }
 
-    // char copy[LINE_SIZE];
-  // int size = get_command_copy(copy,command[id],id);  
-  // int isPipe = has_pipe(copy,size);
-
-    // printf("line: %s",line);
-    // exit(1);
-    execute(commandNum,args,isAmpersand);
+    execute(commandNum,commands);
 
     // delete previous line input
     memset(input, 0, LINE_SIZE);
 
-    free(isAmpersand);
-    free(buffer);
+    free_commands(commands);
+    }
+  }
+
+  void free_commands(Command *commands){
+    int i,j;
+
+    for (i=0;i<LINE_SIZE;i++){
+      commands[i].isAmpersand = 0;
+      commands[i].isPipe =0;
+      for (j=0; j<ARG_SIZE; j++)
+        commands[i].args[j] = NULL;      
     }
   }
 
@@ -158,40 +158,40 @@ char *remove_whitespace (char *line){
   return line;
 }
 
-int split_old(const char *delim, char *src, char **dst){
+int split_args(const char *delim, Command *commands, int id){
   char *token;
+  char *copy = strdup(commands[id].args[0]);
   int count=0;
 
-  token = strtok(src, delim);
+  commands[id].isPipe = has_pipe(copy,strlen(copy));
+
+  token = strtok(commands[id].args[0], delim);
   while( token != NULL ) {
-    dst[count] = token;
+    commands[id].args[count] = token;
     count++;
     token = strtok(NULL, delim);
   }
   return count;
 }
 
-int split(const char *delim, char *src, char **dst, int *flag){
+int split_commands(const char *delim, char *src, Command *commands){
   char *token;
-  int count=0;
-
   char *copy = strdup(src);
-  // strcpy(copy,src);
+  int count=0;
 
   token = strtok(src, delim);
   while( token != NULL ) {
-    // printf("%s+",token);
-    dst[count] = token;
-    // printf("%c\n", copy[token-src+strlen(token)]);
-    if (copy[token-src+strlen(token)] == '&')
-      flag[count]++;
-    count++;
+    commands[count].args[0] = token;
 
+    if (copy[token-src+strlen(token)] == '&')
+      commands[count].isAmpersand = 1;
+    
+    count++;
     token = strtok(NULL, delim);
   }
 
   free(copy);
-  // printf("\n\n");
+
   return count;
 }
 
@@ -216,13 +216,12 @@ void sigquit_handler (int sig) {
 static int *quit; // chech if quit is entered
 static int *flag; // help commands' contiguous execution 
 
-void execute(int size,char *command[LINE_SIZE][ARG_SIZE], int * isAmpersand){
+void execute(int size,Command *commands){
 
   pid_t pid[size];  //array with all the pids
   int status[size]; //array with the status
   int parent =0;    //parent flag
   int i;
-  int isPipe=0;
   int fd[2];
 
   pipe(fd);
@@ -244,13 +243,11 @@ void execute(int size,char *command[LINE_SIZE][ARG_SIZE], int * isAmpersand){
 
     pid[i]=fork(); // fork for each command
 
-    isPipe = checkPipe();
-
     if (pid[i] > 0){        //PARENT process
       parent = 1;
     }
     else if (pid[i] == 0){  // CHILD processes 
-      child(command,i);
+      child(commands[i], i);
       exit(EXIT_SUCCESS);
     }
     else {                  // ERROR during fork
@@ -271,16 +268,16 @@ void execute(int size,char *command[LINE_SIZE][ARG_SIZE], int * isAmpersand){
       
       // while(WIFEXITED(status));
 
-    if (WEXITSTATUS(status[i]) == EXIT_FAILURE && isAmpersand[i]){
-      printf("[ERROR]: command %s FAILED\n",command[i][0]);
-      kill_children(pid,i,size);
-      return EXIT_FAILURE;
-    }
-    else{
-      printf("Everything FINE\n");
-    }
-    // if (WISIGNALED(status[i])) 
-   //   printf("Child exited via signal %d\n",WTERMSIG(status[i]));
+      if (WEXITSTATUS(status[i]) == EXIT_FAILURE && commands[i].isAmpersand){
+        printf("[ERROR]: command %s FAILED\n",commands[i].args[0]);
+        kill_children(pid,i,size);
+        return EXIT_FAILURE;
+      }
+      else{
+        // printf("Everything FINE\n");
+      }
+      // if (WISIGNALED(status[i])) 
+     //   printf("Child exited via signal %d\n",WTERMSIG(status[i]));
   
   
     }
@@ -327,7 +324,7 @@ spawn_proc (int in, int out, struct command *cmd)
   return pid;
 }*/
 
-void child(char *command[LINE_SIZE][ARG_SIZE], int id){
+void child(Command cmd,int id){
 
   // wait until previous command execution
   while(!flag[id]);
@@ -368,19 +365,19 @@ void child(char *command[LINE_SIZE][ARG_SIZE], int id){
   // }
 
   // empty command
-  if( strcmp(command[id][0],"") == 0){
+  if( strcmp(cmd.args[0],"") == 0){
     // printf("empty command\n");
     exit(EXIT_SUCCESS);
   }
   // quit is entered
-  if( strcmp(command[id][0],"quit")==0 ){
+  if( strcmp(cmd.args[0],"quit")==0 ){
     // printf("quit entered\n");
     *quit=1;
     exit(EXIT_FAILURE);
   }
 
   // execute command
-  if(execvp(command[id][0], command[id]) == -1){
+  if(execvp(cmd.args[0], cmd.args) == -1){
     // invalid command   
     // printf("Unknown command: %s\n",command[id][0]);
     exit(EXIT_FAILURE);
@@ -418,7 +415,7 @@ int get_command_copy (char *copy, char *command[ARG_SIZE], int id){
 
 int has_pipe(char *command, int size){
   int i=0;
-  int count=1;
+  int count=0;
   for(i=0;i<size;i++)
     if (command[i] == '|')
       count++;

@@ -17,6 +17,12 @@
 #include <unistd.h>
 #include <sched.h>
 
+#define LINE_SIZE 512
+#define ARG_SIZE  64
+
+typedef struct _Command Command;
+
+
 // error handlers
 #define HANDLE_NULL( a ) {if (a == NULL) { \
                             printf( "Host memory failed in %s at line %d\n", \
@@ -27,6 +33,8 @@
                             printf( "File reading failed in %s at line %d\n", \
                                     __FILE__, __LINE__ ); \
                             exit( EXIT_FAILURE );}}
+
+
 
 // declarate functions
 void interactive();
@@ -39,16 +47,24 @@ char *remove_whitespace (char *line);
 
 int split_old(const char *delim, char *src, char **dst);
 
-int split(const char *delim, char *src, char **dst, int *flag);
 
-void execute(int size,char *commands[512][64], int *flag);
 
-void child(char *command[512][64], int id);
+// void execute(int size,char *commands[LINE_SIZE][ARG_SIZE], int *flag);
+
+// void child(char *command[LINE_SIZE][ARG_SIZE], int id);
 
 void kill_children(pid_t *pid, int start, int size);
 
-int get_command_copy (char* copy, char *command[64], int id);
+int get_command_copy (char* copy, char *command[ARG_SIZE], int id);
 
 int has_pipe(char *command, int size);
+
+
+
+int split_commands(const char *delim, char *src, Command *commands);
+int split_args(const char *delim, Command *commands, int id);
+void free_commands(Command *commands);
+void child(Command cmd, int id);
+void execute(int size,Command *commands);
 
 #endif
